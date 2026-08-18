@@ -1,584 +1,1100 @@
 import streamlit as st
 import cv2
 import numpy as np
+from PIL import Image
+import io
 
-# ---------------------------------------------------------
-# PAGE SETTINGS
-# ---------------------------------------------------------
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
-    page_title="Image Processing Operator Dashboard",
+    page_title="Image Processing ",
     page_icon="🖼️",
     layout="wide"
 )
 
-# ---------------------------------------------------------
-# KERNELS
-# ---------------------------------------------------------
 
-MEAN_KERNEL = np.ones((3, 3), dtype=float) / 9
+# ============================================================
+# CUSTOM CSS
+# ============================================================
 
-GAUSSIAN_KERNEL = np.array([
-    [1, 2, 1],
-    [2, 4, 2],
-    [1, 2, 1]
-], dtype=float) / 16
+st.markdown("""
+<style>
 
-SOBEL_X = np.array([
-    [-1, 0, 1],
-    [-2, 0, 2],
-    [-1, 0, 1]
-], dtype=float)
+.main {
+    background-color: #f7f9fc;
+}
 
-SOBEL_Y = np.array([
-    [-1, -2, -1],
-    [0, 0, 0],
-    [1, 2, 1]
-], dtype=float)
+.title {
+    font-size: 42px;
+    font-weight: bold;
+    text-align: center;
+    color: #6C2BD9;
+    margin-bottom: 5px;
+}
 
-PREWITT_X = np.array([
-    [-1, 0, 1],
-    [-1, 0, 1],
-    [-1, 0, 1]
-], dtype=float)
+.subtitle {
+    text-align: center;
+    font-size: 18px;
+    color: #555555;
+    margin-bottom: 25px;
+}
 
-PREWITT_Y = np.array([
-    [-1, -1, -1],
-    [0, 0, 0],
-    [1, 1, 1]
-], dtype=float)
+.section-title {
+    font-size: 25px;
+    font-weight: bold;
+    color: #E91E63;
+    border-bottom: 3px solid #E91E63;
+    padding-bottom: 5px;
+    margin-top: 20px;
+}
 
-LAPLACIAN_KERNEL = np.array([
-    [0, 1, 0],
-    [1, -4, 1],
-    [0, 1, 0]
-], dtype=float)
+.info-box {
+    background-color: #EEF4FF;
+    border-left: 6px solid #4A90E2;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
 
-SHARPEN_KERNEL = np.array([
-    [0, -1, 0],
-    [-1, 5, -1],
-    [0, -1, 0]
-], dtype=float)
+.about-box {
+    background-color: #FFF4E6;
+    border-left: 6px solid #FF9800;
+    padding: 15px;
+    border-radius: 10px;
+}
 
+.matrix-box {
+    background-color: #F3E5F5;
+    border-left: 6px solid #9C27B0;
+    padding: 15px;
+    border-radius: 10px;
+}
 
-# ---------------------------------------------------------
-# FUNCTIONS
-# ---------------------------------------------------------
-
-def get_pixel_matrix(gray):
-
-    h, w = gray.shape
-
-    if h < 3 or w < 3:
-        return cv2.resize(gray, (3, 3)).astype(float)
-
-    cy = h // 2
-    cx = w // 2
-
-    return gray[
-        cy - 1:cy + 2,
-        cx - 1:cx + 2
-    ].astype(float)
+</style>
+""", unsafe_allow_html=True)
 
 
-def calculate_matrix(pixel_matrix, kernel):
-    return np.sum(pixel_matrix * kernel)
-
-
-def show_matrix(matrix):
-    return np.round(matrix, 2)
-
-
-# ---------------------------------------------------------
+# ============================================================
 # TITLE
-# ---------------------------------------------------------
+# ============================================================
 
-st.title("🖼️ IMAGE PROCESSING OPERATOR DASHBOARD")
-
-st.write(
-    "Upload an image and apply different image processing operators."
+st.markdown(
+    '<div class="title">🖼️ IMAGE PROCESSING </div>',
+    unsafe_allow_html=True
 )
 
-st.divider()
+st.markdown(
+    '<div class="subtitle">Interactive Image Processing using Python, OpenCV, Pillow and NumPy</div>',
+    unsafe_allow_html=True
+)
 
 
-# ---------------------------------------------------------
+# ============================================================
 # SIDEBAR
-# ---------------------------------------------------------
+# ============================================================
 
-st.sidebar.header("⚙️ CONTROL PANEL")
+st.sidebar.title("⚙️ Processing Controls")
 
 uploaded_file = st.sidebar.file_uploader(
-    "📁 Upload Image",
-    type=["jpg", "jpeg", "png", "bmp"]
-)
-
-operator = st.sidebar.selectbox(
-    "Select Operator",
-    [
-        "Mean Filter",
-        "Gaussian Blur",
-        "Sobel",
-        "Prewitt",
-        "Laplacian",
-        "Canny",
-        "Sharpening",
-        "Thresholding"
-    ]
+    "📤 Upload an Image",
+    type=["jpg", "jpeg", "png", "bmp", "webp"]
 )
 
 
-# ---------------------------------------------------------
-# MAIN PROGRAM
-# ---------------------------------------------------------
+# ============================================================
+# FILTER LIST
+# ============================================================
 
-if uploaded_file is None:
+filter_options = [
 
-    st.info("Please upload an image from the sidebar.")
+    "Original",
 
-    st.markdown("""
-    ### Available Operators
+    "Grayscale",
 
-    1. Mean Filter
-    2. Gaussian Blur
-    3. Sobel
-    4. Prewitt
-    5. Laplacian
-    6. Canny
-    7. Sharpening
-    8. Thresholding
-    """)
+    "Mean Filter",
 
-else:
+    "Gaussian Filter",
 
-    # -----------------------------------------------------
-    # READ IMAGE
-    # -----------------------------------------------------
+    "Median Filter",
 
-    file_bytes = np.asarray(
-        bytearray(uploaded_file.read()),
-        dtype=np.uint8
-    )
+    "Blur Filter",
 
-    original = cv2.imdecode(
-        file_bytes,
-        cv2.IMREAD_COLOR
-    )
+    "Sharpening",
 
-    gray = cv2.cvtColor(
-        original,
-        cv2.COLOR_BGR2GRAY
-    )
+    "Sobel Edge",
 
-    pixel_matrix = get_pixel_matrix(gray)
+    "Prewitt Edge",
 
-    # Default values
-    processed = original.copy()
-    kernel = MEAN_KERNEL
-    result_text = ""
+    "Laplacian Edge",
+
+    "Canny Edge",
+
+    "Threshold",
+
+    "Adaptive Threshold",
+
+    "Erosion",
+
+    "Dilation",
+
+    "Opening",
+
+    "Closing",
+
+    "Brightness",
+
+    "Contrast",
+
+    "HSV"
+]
 
 
-    # -----------------------------------------------------
+selected_filter = st.sidebar.selectbox(
+    "🎨 Select Image Processing Operation",
+    filter_options
+)
+
+
+# ============================================================
+# KERNEL SIZE
+# ============================================================
+
+kernel_size = st.sidebar.selectbox(
+    "🔢 Kernel Size",
+    [3, 5, 7]
+)
+
+
+# ============================================================
+# SLIDERS
+# ============================================================
+
+brightness_value = st.sidebar.slider(
+    "☀️ Brightness",
+    -100,
+    100,
+    0
+)
+
+contrast_value = st.sidebar.slider(
+    "🌈 Contrast",
+    0.5,
+    3.0,
+    1.0,
+    0.1
+)
+
+
+# ============================================================
+# ABOUT INFORMATION
+# ============================================================
+
+filter_information = {
+
+    "Original": {
+        "about": "Displays the original uploaded image without applying any processing.",
+        "process": "The input image is directly displayed as it is."
+    },
+
+    "Grayscale": {
+        "about": "Converts a colour image into a single-channel grayscale image.",
+        "process": "Each pixel is converted from RGB/BGR representation into an intensity value."
+    },
+
+    "Mean Filter": {
+        "about": "Mean filtering is a smoothing technique used to reduce noise.",
+        "process": "A kernel is moved over the image and the average value of neighbouring pixels is calculated."
+    },
+
+    "Gaussian Filter": {
+        "about": "Gaussian filtering smooths an image while giving higher importance to nearby pixels.",
+        "process": "A Gaussian kernel is convolved with the image to reduce noise and smooth edges."
+    },
+
+    "Median Filter": {
+        "about": "Median filtering is useful for removing salt-and-pepper noise.",
+        "process": "The neighbouring pixel values are sorted and the middle value is assigned to the center pixel."
+    },
+
+    "Blur Filter": {
+        "about": "Blur filtering reduces image details and high-frequency noise.",
+        "process": "Neighbouring pixels are averaged to produce a smoother image."
+    },
+
+    "Sharpening": {
+        "about": "Sharpening enhances edges and fine details in an image.",
+        "process": "A sharpening kernel is applied to increase differences between neighbouring pixels."
+    },
+
+    "Sobel Edge": {
+        "about": "Sobel operator detects edges by calculating image intensity gradients.",
+        "process": "Horizontal and vertical Sobel kernels are applied and combined to detect strong edges."
+    },
+
+    "Prewitt Edge": {
+        "about": "Prewitt operator is an edge detection technique.",
+        "process": "Prewitt horizontal and vertical kernels calculate intensity changes in the X and Y directions."
+    },
+
+    "Laplacian Edge": {
+        "about": "Laplacian detects edges using the second derivative of the image.",
+        "process": "The Laplacian kernel identifies rapid changes in pixel intensity."
+    },
+
+    "Canny Edge": {
+        "about": "Canny is a multi-stage edge detection algorithm.",
+        "process": "It performs noise reduction, gradient calculation, non-maximum suppression and hysteresis thresholding."
+    },
+
+    "Threshold": {
+        "about": "Thresholding converts a grayscale image into a binary image.",
+        "process": "Pixels above a selected threshold become white and pixels below it become black."
+    },
+
+    "Adaptive Threshold": {
+        "about": "Adaptive thresholding works well when illumination is not uniform.",
+        "process": "A different threshold value is calculated for different local regions of the image."
+    },
+
+    "Erosion": {
+        "about": "Erosion removes pixels from object boundaries.",
+        "process": "A kernel moves across the image and shrinks bright regions."
+    },
+
+    "Dilation": {
+        "about": "Dilation expands bright regions in an image.",
+        "process": "The kernel increases the size of foreground objects."
+    },
+
+    "Opening": {
+        "about": "Opening is useful for removing small objects and noise.",
+        "process": "Opening performs erosion followed by dilation."
+    },
+
+    "Closing": {
+        "about": "Closing is useful for filling small holes and gaps.",
+        "process": "Closing performs dilation followed by erosion."
+    },
+
+    "Brightness": {
+        "about": "Brightness adjustment makes the image lighter or darker.",
+        "process": "A constant value is added or subtracted from the image pixel intensities."
+    },
+
+    "Contrast": {
+        "about": "Contrast adjustment changes the difference between dark and bright regions.",
+        "process": "Pixel values are multiplied by a contrast factor."
+    },
+
+    "HSV": {
+        "about": "HSV represents colour using Hue, Saturation and Value.",
+        "process": "The BGR/RGB image is converted into the HSV colour space."
+    }
+}
+
+
+# ============================================================
+# MAIN PROCESSING FUNCTION
+# ============================================================
+
+def process_image(image, operation, ksize):
+
+    img = image.copy()
+
+    kernel = np.ones((ksize, ksize), np.uint8)
+
+    # --------------------------------------------------------
+    # ORIGINAL
+    # --------------------------------------------------------
+
+    if operation == "Original":
+        return img
+
+    # --------------------------------------------------------
+    # GRAYSCALE
+    # --------------------------------------------------------
+
+    elif operation == "Grayscale":
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        return gray
+
+    # --------------------------------------------------------
     # MEAN FILTER
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    if operator == "Mean Filter":
+    elif operation == "Mean Filter":
 
-        kernel = MEAN_KERNEL
+        result = cv2.blur(img, (ksize, ksize))
 
-        processed = cv2.blur(
-            original,
-            (3, 3)
-        )
+        return result
 
-        result = calculate_matrix(
-            pixel_matrix,
-            kernel
-        )
+    # --------------------------------------------------------
+    # GAUSSIAN FILTER
+    # --------------------------------------------------------
 
-        result_text = (
-            "MEAN FILTER CALCULATION\n\n"
-            f"Result = {result:.2f}\n\n"
-            "Formula:\n"
-            "Sum(Pixel × Kernel)"
-        )
+    elif operation == "Gaussian Filter":
 
-
-    # -----------------------------------------------------
-    # GAUSSIAN BLUR
-    # -----------------------------------------------------
-
-    elif operator == "Gaussian Blur":
-
-        kernel = GAUSSIAN_KERNEL
-
-        processed = cv2.GaussianBlur(
-            original,
-            (3, 3),
+        result = cv2.GaussianBlur(
+            img,
+            (ksize, ksize),
             0
         )
 
-        result = calculate_matrix(
-            pixel_matrix,
-            kernel
+        return result
+
+    # --------------------------------------------------------
+    # MEDIAN FILTER
+    # --------------------------------------------------------
+
+    elif operation == "Median Filter":
+
+        result = cv2.medianBlur(
+            img,
+            ksize
         )
 
-        result_text = (
-            "GAUSSIAN BLUR CALCULATION\n\n"
-            f"Result = {result:.2f}\n\n"
-            "Kernel Sum = 1.00\n"
-            "Used for image smoothing."
+        return result
+
+    # --------------------------------------------------------
+    # BLUR FILTER
+    # --------------------------------------------------------
+
+    elif operation == "Blur Filter":
+
+        result = cv2.blur(
+            img,
+            (ksize, ksize)
         )
 
+        return result
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # SHARPENING
+    # --------------------------------------------------------
+
+    elif operation == "Sharpening":
+
+        sharpening_kernel = np.array([
+            [0, -1, 0],
+            [-1, 5, -1],
+            [0, -1, 0]
+        ])
+
+        result = cv2.filter2D(
+            img,
+            -1,
+            sharpening_kernel
+        )
+
+        return result
+
+    # --------------------------------------------------------
     # SOBEL
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    elif operator == "Sobel":
+    elif operation == "Sobel Edge":
 
-        kernel = SOBEL_X
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
 
-        gx_image = cv2.Sobel(
+        sobel_x = cv2.Sobel(
             gray,
             cv2.CV_64F,
             1,
             0,
-            ksize=3
+            ksize=ksize
         )
 
-        gy_image = cv2.Sobel(
+        sobel_y = cv2.Sobel(
             gray,
             cv2.CV_64F,
             0,
             1,
-            ksize=3
+            ksize=ksize
         )
 
-        gx_image = cv2.convertScaleAbs(gx_image)
-        gy_image = cv2.convertScaleAbs(gy_image)
-
-        processed = cv2.addWeighted(
-            gx_image,
-            0.5,
-            gy_image,
-            0.5,
-            0
+        magnitude = cv2.magnitude(
+            sobel_x.astype(np.float32),
+            sobel_y.astype(np.float32)
         )
 
-        gx = calculate_matrix(
-            pixel_matrix,
-            SOBEL_X
+        result = cv2.convertScaleAbs(
+            magnitude
         )
 
-        gy = calculate_matrix(
-            pixel_matrix,
-            SOBEL_Y
-        )
+        return result
 
-        magnitude = np.sqrt(
-            gx ** 2 + gy ** 2
-        )
-
-        result_text = (
-            "SOBEL CALCULATION\n\n"
-            f"Gx = {gx:.2f}\n"
-            f"Gy = {gy:.2f}\n\n"
-            f"Gradient Magnitude = "
-            f"{magnitude:.2f}\n\n"
-            "Gx Kernel:\n"
-            f"{SOBEL_X}\n\n"
-            "Gy Kernel:\n"
-            f"{SOBEL_Y}"
-        )
-
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # PREWITT
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    elif operator == "Prewitt":
+    elif operation == "Prewitt Edge":
 
-        kernel = PREWITT_X
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
 
-        px = cv2.filter2D(
+        prewitt_x = np.array([
+            [-1, 0, 1],
+            [-1, 0, 1],
+            [-1, 0, 1]
+        ], dtype=np.float32)
+
+        prewitt_y = np.array([
+            [-1, -1, -1],
+            [0, 0, 0],
+            [1, 1, 1]
+        ], dtype=np.float32)
+
+        gx = cv2.filter2D(
             gray,
-            cv2.CV_64F,
-            PREWITT_X
+            cv2.CV_32F,
+            prewitt_x
         )
 
-        py = cv2.filter2D(
+        gy = cv2.filter2D(
             gray,
-            cv2.CV_64F,
-            PREWITT_Y
+            cv2.CV_32F,
+            prewitt_y
         )
 
-        px = cv2.convertScaleAbs(px)
-        py = cv2.convertScaleAbs(py)
-
-        processed = cv2.addWeighted(
-            px,
-            0.5,
-            py,
-            0.5,
-            0
+        magnitude = cv2.magnitude(
+            gx,
+            gy
         )
 
-        gx = calculate_matrix(
-            pixel_matrix,
-            PREWITT_X
+        result = cv2.convertScaleAbs(
+            magnitude
         )
 
-        gy = calculate_matrix(
-            pixel_matrix,
-            PREWITT_Y
-        )
+        return result
 
-        magnitude = np.sqrt(
-            gx ** 2 + gy ** 2
-        )
-
-        result_text = (
-            "PREWITT CALCULATION\n\n"
-            f"Gx = {gx:.2f}\n"
-            f"Gy = {gy:.2f}\n\n"
-            f"Gradient Magnitude = "
-            f"{magnitude:.2f}"
-        )
-
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # LAPLACIAN
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    elif operator == "Laplacian":
+    elif operation == "Laplacian Edge":
 
-        kernel = LAPLACIAN_KERNEL
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
 
-        laplacian = cv2.Laplacian(
+        result = cv2.Laplacian(
             gray,
             cv2.CV_64F
         )
 
-        processed = cv2.convertScaleAbs(
-            laplacian
+        result = cv2.convertScaleAbs(
+            result
         )
 
-        result = calculate_matrix(
-            pixel_matrix,
-            kernel
-        )
+        return result
 
-        result_text = (
-            "LAPLACIAN CALCULATION\n\n"
-            f"Result = {result:.2f}\n\n"
-            "Used for edge detection."
-        )
-
-
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # CANNY
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
-    elif operator == "Canny":
+    elif operation == "Canny Edge":
 
-        kernel = GAUSSIAN_KERNEL
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
 
-        processed = cv2.Canny(
+        result = cv2.Canny(
             gray,
             100,
             200
         )
 
-        result_text = (
-            "CANNY EDGE DETECTION\n\n"
-            "Step 1: Gaussian Blur\n"
-            "Step 2: Gradient Calculation\n"
-            "Step 3: Non-Maximum Suppression\n"
-            "Step 4: Double Threshold\n"
-            "Step 5: Edge Tracking\n\n"
-            "Lower Threshold = 100\n"
-            "Upper Threshold = 200"
+        return result
+
+    # --------------------------------------------------------
+    # THRESHOLD
+    # --------------------------------------------------------
+
+    elif operation == "Threshold":
+
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
         )
 
-
-    # -----------------------------------------------------
-    # SHARPENING
-    # -----------------------------------------------------
-
-    elif operator == "Sharpening":
-
-        kernel = SHARPEN_KERNEL
-
-        processed = cv2.filter2D(
-            original,
-            -1,
-            kernel
-        )
-
-        result = calculate_matrix(
-            pixel_matrix,
-            kernel
-        )
-
-        result_text = (
-            "SHARPENING CALCULATION\n\n"
-            f"Result = {result:.2f}"
-        )
-
-
-    # -----------------------------------------------------
-    # THRESHOLDING
-    # -----------------------------------------------------
-
-    elif operator == "Thresholding":
-
-        kernel = np.array([
-            [0, 0, 0],
-            [0, 1, 0],
-            [0, 0, 0]
-        ], dtype=float)
-
-        threshold = 127
-
-        _, processed = cv2.threshold(
+        _, result = cv2.threshold(
             gray,
-            threshold,
+            127,
             255,
             cv2.THRESH_BINARY
         )
 
-        center_pixel = pixel_matrix[1, 1]
+        return result
 
-        result = (
-            255
-            if center_pixel > threshold
-            else 0
+    # --------------------------------------------------------
+    # ADAPTIVE THRESHOLD
+    # --------------------------------------------------------
+
+    elif operation == "Adaptive Threshold":
+
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
         )
 
-        result_text = (
-            "THRESHOLD CALCULATION\n\n"
-            f"Center Pixel = {center_pixel:.0f}\n"
-            f"Threshold = {threshold}\n\n"
-            f"Result = {result}\n\n"
-            "Pixel > 127 → 255\n"
-            "Pixel ≤ 127 → 0"
+        result = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11,
+            2
         )
 
+        return result
 
-    # -----------------------------------------------------
-    # IMAGE DISPLAY
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # EROSION
+    # --------------------------------------------------------
 
-    st.subheader(
-        f"🔹 {operator}"
+    elif operation == "Erosion":
+
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
+
+        result = cv2.erode(
+            gray,
+            kernel,
+            iterations=1
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # DILATION
+    # --------------------------------------------------------
+
+    elif operation == "Dilation":
+
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
+
+        result = cv2.dilate(
+            gray,
+            kernel,
+            iterations=1
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # OPENING
+    # --------------------------------------------------------
+
+    elif operation == "Opening":
+
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
+
+        result = cv2.morphologyEx(
+            gray,
+            cv2.MORPH_OPEN,
+            kernel
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # CLOSING
+    # --------------------------------------------------------
+
+    elif operation == "Closing":
+
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2GRAY
+        )
+
+        result = cv2.morphologyEx(
+            gray,
+            cv2.MORPH_CLOSE,
+            kernel
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # BRIGHTNESS
+    # --------------------------------------------------------
+
+    elif operation == "Brightness":
+
+        result = cv2.convertScaleAbs(
+            img,
+            alpha=1.0,
+            beta=brightness_value
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # CONTRAST
+    # --------------------------------------------------------
+
+    elif operation == "Contrast":
+
+        result = cv2.convertScaleAbs(
+            img,
+            alpha=contrast_value,
+            beta=0
+        )
+
+        return result
+
+    # --------------------------------------------------------
+    # HSV
+    # --------------------------------------------------------
+
+    elif operation == "HSV":
+
+        result = cv2.cvtColor(
+            img,
+            cv2.COLOR_BGR2HSV
+        )
+
+        return result
+
+    return img
+
+
+# ============================================================
+# NO IMAGE MESSAGE
+# ============================================================
+
+if uploaded_file is None:
+
+    st.info(
+        "👆 Please upload an image from the sidebar to start image processing."
     )
+
+    st.markdown(
+        """
+        <div class="info-box">
+
+        <b>How to use:</b><br><br>
+
+        1. Upload an image.<br>
+        2. Select an image processing operation.<br>
+        3. Select kernel size when required.<br>
+        4. View the original and processed image.<br>
+        5. Check the About and Process explanation.<br>
+        6. View the matrix representation.<br>
+        7. Download the processed image.
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.stop()
+
+
+# ============================================================
+# READ IMAGE
+# ============================================================
+
+pil_image = Image.open(uploaded_file).convert("RGB")
+
+image_array = np.array(pil_image)
+
+img = cv2.cvtColor(
+    image_array,
+    cv2.COLOR_RGB2BGR
+)
+
+
+# ============================================================
+# PROCESS IMAGE
+# ============================================================
+
+processed_image = process_image(
+    img,
+    selected_filter,
+    kernel_size
+)
+
+
+# ============================================================
+# CONVERT FOR DISPLAY
+# ============================================================
+
+if len(processed_image.shape) == 2:
+
+    display_processed = processed_image
+
+else:
+
+    display_processed = cv2.cvtColor(
+        processed_image,
+        cv2.COLOR_BGR2RGB
+    )
+
+
+# ============================================================
+# IMAGE INFORMATION
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">📊 Image Information</div>',
+    unsafe_allow_html=True
+)
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        "Width",
+        f"{img.shape[1]} px"
+    )
+
+with col2:
+    st.metric(
+        "Height",
+        f"{img.shape[0]} px"
+    )
+
+with col3:
+    st.metric(
+        "Channels",
+        img.shape[2]
+    )
+
+with col4:
+    st.metric(
+        "Operation",
+        selected_filter
+    )
+
+
+# ============================================================
+# ORIGINAL AND PROCESSED IMAGE
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">🖼️ Image Result</div>',
+    unsafe_allow_html=True
+)
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    st.subheader("📥 Original Image")
+
+    st.image(
+        pil_image,
+        use_container_width=True
+    )
+
+with col2:
+
+    st.subheader("📤 Processed Image")
+
+    st.image(
+        display_processed,
+        use_container_width=True
+    )
+
+
+# ============================================================
+# ABOUT
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">📚 About Selected Operation</div>',
+    unsafe_allow_html=True
+)
+
+information = filter_information[selected_filter]
+
+st.markdown(
+    f"""
+    <div class="about-box">
+
+    <h4>🔹 About {selected_filter}</h4>
+
+    <p>{information["about"]}</p>
+
+    <h4>🔄 Process</h4>
+
+    <p>{information["process"]}</p>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# KERNEL MATRIX
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">🔢 Kernel / Matrix</div>',
+    unsafe_allow_html=True
+)
+
+if selected_filter in [
+    "Mean Filter",
+    "Gaussian Filter",
+    "Median Filter",
+    "Blur Filter",
+    "Erosion",
+    "Dilation",
+    "Opening",
+    "Closing"
+]:
+
+    matrix = np.ones(
+        (kernel_size, kernel_size),
+        dtype=int
+    )
+
+    st.markdown(
+        """
+        <div class="matrix-box">
+        <b>Kernel Matrix used for processing:</b>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.dataframe(
+        matrix,
+        use_container_width=True
+    )
+
+
+elif selected_filter == "Sharpening":
+
+    matrix = np.array([
+        [0, -1, 0],
+        [-1, 5, -1],
+        [0, -1, 0]
+    ])
+
+    st.markdown(
+        """
+        <div class="matrix-box">
+        <b>Sharpening Kernel:</b>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.dataframe(
+        matrix,
+        use_container_width=True
+    )
+
+
+elif selected_filter == "Prewitt Edge":
+
+    prewitt_x = np.array([
+        [-1, 0, 1],
+        [-1, 0, 1],
+        [-1, 0, 1]
+    ])
+
+    prewitt_y = np.array([
+        [-1, -1, -1],
+        [0, 0, 0],
+        [1, 1, 1]
+    ])
 
     col1, col2 = st.columns(2)
 
     with col1:
 
-        st.markdown("### ORIGINAL IMAGE")
+        st.write("Prewitt X Kernel")
 
-        original_rgb = cv2.cvtColor(
-            original,
-            cv2.COLOR_BGR2RGB
-        )
-
-        st.image(
-            original_rgb,
+        st.dataframe(
+            prewitt_x,
             use_container_width=True
         )
 
     with col2:
 
-        st.markdown("### PROCESSED IMAGE")
-
-        if len(processed.shape) == 2:
-
-            st.image(
-                processed,
-                use_container_width=True
-            )
-
-        else:
-
-            processed_rgb = cv2.cvtColor(
-                processed,
-                cv2.COLOR_BGR2RGB
-            )
-
-            st.image(
-                processed_rgb,
-                use_container_width=True
-            )
-
-
-    # -----------------------------------------------------
-    # MATRIX DISPLAY
-    # -----------------------------------------------------
-
-    st.divider()
-
-    st.subheader(
-        f"🔢 OPERATOR: {operator}"
-    )
-
-    c1, c2, c3 = st.columns(3)
-
-
-    with c1:
-
-        st.markdown("### KERNEL MATRIX")
+        st.write("Prewitt Y Kernel")
 
         st.dataframe(
-            show_matrix(kernel),
-            hide_index=True,
+            prewitt_y,
             use_container_width=True
         )
 
 
-    with c2:
+elif selected_filter == "Sobel Edge":
 
-        st.markdown("### PIXEL MATRIX")
+    sobel_x = np.array([
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1]
+    ])
+
+    sobel_y = np.array([
+        [-1, -2, -1],
+        [0, 0, 0],
+        [1, 2, 1]
+    ])
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.write("Sobel X Kernel")
 
         st.dataframe(
-            show_matrix(pixel_matrix),
-            hide_index=True,
+            sobel_x,
+            use_container_width=True
+        )
+
+    with col2:
+
+        st.write("Sobel Y Kernel")
+
+        st.dataframe(
+            sobel_y,
             use_container_width=True
         )
 
 
-    with c3:
+elif selected_filter == "Laplacian Edge":
 
-        st.markdown("### MATRIX RESULT")
+    laplacian_kernel = np.array([
+        [0, 1, 0],
+        [1, -4, 1],
+        [0, 1, 0]
+    ])
 
-        st.code(
-            result_text,
-            language="text"
-        )
-
-
-    # -----------------------------------------------------
-    # DOWNLOAD
-    # -----------------------------------------------------
-
-    st.divider()
-
-    success, encoded = cv2.imencode(
-        ".png",
-        processed
+    st.dataframe(
+        laplacian_kernel,
+        use_container_width=True
     )
 
-    if success:
 
-        st.download_button(
-            "💾 DOWNLOAD PROCESSED IMAGE",
-            encoded.tobytes(),
-            "processed_image.png",
-            "image/png"
-        )
+else:
 
-    st.success(
-        f"{operator} applied successfully ✓"
+    st.info(
+        "ℹ️ This operation does not use a fixed convolution kernel."
     )
+
+
+# ============================================================
+# PIXEL MATRIX
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">🔬 Image Pixel Matrix</div>',
+    unsafe_allow_html=True
+)
+
+st.write(
+    "The image is represented internally as a NumPy array of pixel values."
+)
+
+if len(processed_image.shape) == 2:
+
+    pixel_matrix = processed_image[:10, :10]
+
+else:
+
+    pixel_matrix = processed_image[:10, :10, 0]
+
+
+st.write(
+    "First 10 × 10 pixel values:"
+)
+
+st.dataframe(
+    pixel_matrix,
+    use_container_width=True
+)
+
+
+# ============================================================
+# DOWNLOAD PROCESSED IMAGE
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">⬇️ Download Result</div>',
+    unsafe_allow_html=True
+)
+
+
+if len(processed_image.shape) == 2:
+
+    download_image = Image.fromarray(
+        processed_image
+    )
+
+else:
+
+    rgb_result = cv2.cvtColor(
+        processed_image,
+        cv2.COLOR_BGR2RGB
+    )
+
+    download_image = Image.fromarray(
+        rgb_result
+    )
+
+
+buffer = io.BytesIO()
+
+download_image.save(
+    buffer,
+    format="PNG"
+)
+
+buffer.seek(0)
+
+
+st.download_button(
+    label="⬇️ Download Processed Image",
+    data=buffer,
+    file_name="processed_image.png",
+    mime="image/png"
+)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    """
+    <div style="text-align:center;">
+
+    <b>🖼️ Image Processing Dashboard</b><br>
+
+    Developed using Python + Streamlit + OpenCV + Pillow + NumPy
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
